@@ -13,6 +13,11 @@ app.use(
   }),
 );
 
+// Root route to prevent 404 on the base Vercel URL
+app.get("/", (req, res) => {
+  res.json({ message: "API is running successfully on Vercel!" });
+});
+
 app.get("/api/timeline/:ticketId", async (req, res) => {
   const token = process.env.DEVREV_TOKEN;
   if (!token)
