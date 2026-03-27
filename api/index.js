@@ -6,12 +6,15 @@ import cors from "cors";
 const app = express();
 const PORT = 3000;
 
-// SECURITY: Only allow your specific Vercel frontend to call this API
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || "*",
-  }),
-);
+// SECURITY: Only allow your specific Vercel frontend to call this API.
+// In production, Vercel handles this via vercel.json to prevent CORS stripping on edge errors/redirects.
+if (process.env.NODE_ENV !== "production") {
+  app.use(
+    cors({
+      origin: process.env.FRONTEND_URL || "*",
+    }),
+  );
+}
 
 // Root route to prevent 404 on the base Vercel URL
 app.get("/", (req, res) => {
