@@ -17,6 +17,13 @@ app.use(cors({
 }));
 app.use(express.json());
 
+app.get('/debug-env', (req, res) => {
+  res.json({
+    NODE_ENV: process.env.NODE_ENV,
+    hasDevrevToken: !!process.env.DEVREV_TOKEN,
+    hasFrontendUrl: !!process.env.FRONTEND_URL,
+  });
+});
 // 2. Health Check (Vercel Root)
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'Strict TS RWT Engine Online' });
