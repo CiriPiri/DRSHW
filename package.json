@@ -19,7 +19,7 @@
   },
 "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "esbuild src/server.ts --bundle --platform=node --format=esm --packages=external --outfile=api/server.js && mkdir -p public",
+    "build": "esbuild src/server.ts --bundle --platform=node --format=esm --packages=external --outfile=api/server.js && mkdir -p public && echo \"API Engine Online\" > public/index.html",
     "start": "node api/server.js"
   }
 }
