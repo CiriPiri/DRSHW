@@ -12,6 +12,8 @@ console.log('[BOOT-1] ✅ Environment variables parsed by Zod successfully.');
 
 import { logger } from './utils/logger';
 import { timelineRoutes } from './modules/timeline/timeline.route';
+// 1. IMPORT THE NEW TICKET ROUTE
+import { ticketRoutes } from './modules/ticket/ticket.route'; 
 import { errorHandler } from './middleware/error.middleware';
 console.log('[BOOT-2] ✅ Internal modules imported successfully.');
 
@@ -55,8 +57,20 @@ app.get('/', (req, res) => {
 });
 
 // 3. API Routes
-console.log('[BOOT-4] 🛣️  Mounting Timeline Routes');
+console.log('[BOOT-4] 🛣️  Mounting API Routes');
 app.use('/api/timeline', timelineRoutes);
+// 2. MOUNT THE TICKET ROUTE SO EXPRESS KNOWS ABOUT IT
+app.use('/api/ticket', ticketRoutes); 
+
+// 3. JSON 404 CATCH-ALL (Prevents HTML from reaching the React frontend)
+app.use((req, res) => {
+  console.log(`[ROUTE] 🔴 404 NOT FOUND: ${req.method} ${req.url}`);
+  res.status(404).json({
+    success: false,
+    error: `API Route Not Found: ${req.method} ${req.url}`,
+    code: 'ROUTE_NOT_FOUND'
+  });
+});
 
 // 4. Global Error Handler
 console.log('[BOOT-5] 🛡️  Mounting Error Handler');

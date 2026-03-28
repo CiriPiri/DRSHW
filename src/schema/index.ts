@@ -8,6 +8,7 @@ export const envSchema = z.object({
   FRONTEND_URL: z.string().trim().url("FRONTEND_URL must be a valid URL"),
   DEVREV_TOKEN: z.string().trim().min(5, "DEVREV_TOKEN is required"),
 });
+
 // Infer strict type for process.env
 export type EnvConfig = z.infer<typeof envSchema>;
 
@@ -23,3 +24,33 @@ export const getTimelineSchema = z.object({
 });
 
 export type GetTimelineInput = z.infer<typeof getTimelineSchema>;
+
+// ---------------------------------------------------------
+// DATA TRANSFER OBJECTS (DTOs) & INTERFACES
+// ---------------------------------------------------------
+
+/**
+ * Standardized API Response Wrapper
+ */
+export type ApiResponse<T> = 
+  | { success: true; data: T; next_cursor?: string | null }
+  | { success: false; error: string; code: string };
+
+/**
+ * Ticket Metadata Data Transfer Object
+ */
+export interface TicketMetadataDto {
+  ticketId: string;
+  title: string;
+  slaRegion: string;
+  timezone: string;
+}
+
+/**
+ * Stage Update Data Transfer Object (For Timeline)
+ */
+export interface StageUpdateDto {
+  timestamp: string;
+  from: string;
+  to: string;
+}

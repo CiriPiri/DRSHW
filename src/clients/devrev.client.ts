@@ -47,6 +47,25 @@ export class DevRevClient {
       );
     }
   }
+
+  /**
+   * Fetches ticket metadata including SLA and Organization Schedules
+   */
+  public async getTicketMetadata(ticketId: string): Promise<any> {
+    try {
+      const response = await this.client.get('/works.get', {
+        params: { id: ticketId }
+      });
+      return response.data;
+    } catch (error: any) {
+      logger.error({ err: error, ticketId }, 'DevRev works.get API failed');
+      throw new UpstreamApiError(
+        'Failed to fetch ticket metadata from DevRev',
+        error.response?.status || 502,
+        'UPSTREAM_API_FAILURE'
+      );
+    }
+  }
 }
 
 export const devRevClient = new DevRevClient();
