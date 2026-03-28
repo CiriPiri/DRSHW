@@ -18,8 +18,8 @@
     "typescript": "^6.0.2"
   },
 "scripts": {
-  "dev": "tsx watch src/server.ts",
-"build": "esbuild src/server.ts --bundle --platform=node --format=esm --outfile=dist/server.js",
-  "start": "node dist/server.js"
-}
+    "dev": "tsx watch src/server.ts",
+    "build": "esbuild src/server.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server.js",
+    "start": "node dist/server.js"
+  }
 }
