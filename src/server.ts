@@ -9,8 +9,11 @@ import { errorHandler } from './middleware/error.middleware';
 const app = express();
 
 // 1. Standard Middleware
+// In production, enforce FRONTEND_URL strictly. In development, allow all origins.
+const allowedOrigin = env.NODE_ENV === 'production' ? (env.FRONTEND_URL || false) : '*';
+
 app.use(cors({ 
-  origin: env.FRONTEND_URL || '*',
+  origin: allowedOrigin,
   methods: ['GET', 'OPTIONS']
 }));
 app.use(express.json());
@@ -26,8 +29,8 @@ app.use('/api/timeline', timelineRoutes);
 // 4. Global Error Handler (Must be strictly last)
 app.use(errorHandler);
 
-// 5. Server Initialization (Bypass for Vercel Serverless)
-if (env.NODE_ENV !== 'production') {
+// 5. Server Initialization (Strictly bypass for Vercel Serverless)
+if (env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   app.listen(env.PORT, () => {
     logger.info(`🚀 TypeScript Backend running on http://localhost:${env.PORT}`);
   });

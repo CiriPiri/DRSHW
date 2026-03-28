@@ -4,7 +4,7 @@ import { z } from 'zod';
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(3000),
-  FRONTEND_URL: z.string().url("FRONTEND_URL must be a valid URL"),
+  FRONTEND_URL: z.string().url("FRONTEND_URL must be a valid URL").optional(),
   DEVREV_TOKEN: z.string().min(10, "DEVREV_TOKEN is required"),
 });
 
