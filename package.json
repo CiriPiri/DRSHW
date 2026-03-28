@@ -1,6 +1,5 @@
 {
   "name": "devrev-rwt-backend",
-  "type": "module",
   "engines": {
     "node": "20.x"
   },
