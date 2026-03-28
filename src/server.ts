@@ -13,7 +13,7 @@ console.log('[BOOT-1] ✅ Environment variables parsed by Zod successfully.');
 import { logger } from './utils/logger';
 import { timelineRoutes } from './modules/timeline/timeline.route';
 // 1. IMPORT THE NEW TICKET ROUTE
-import { ticketRoutes } from './modules/ticket/ticket.route.js';
+import { ticketRoutes } from './modules/ticket/ticket.route';
 import { errorHandler } from './middleware/error.middleware';
 console.log('[BOOT-2] ✅ Internal modules imported successfully.');
 
