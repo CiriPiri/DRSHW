@@ -13,6 +13,9 @@ export class TicketController {
       const { ticketId } = req.params;
       const data = await ticketService.getMetadata(ticketId);
 
+      // ⚡ PRO CACHING: Cache for 60 seconds. Revalidate in background up to 1 hour.
+      res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=3600');
+      
       res.status(200).json({ success: true, data });
     } catch (error) {
       next(error);

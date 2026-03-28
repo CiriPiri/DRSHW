@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { timelineService } from './timeline.svc';
-import { GetTimelineInput } from '../../schema';
-import { ApiResponse, StageUpdateDto } from '../../types';
+// Explicit .js extensions required for ESM NodeNext resolution
+import { timelineService } from './timeline.svc.js';
+import { GetTimelineInput } from '../../schema/index.js';
+import { ApiResponse, StageUpdateDto } from '../../types/index.js';
 
 export class TimelineController {
   /**
@@ -17,6 +18,9 @@ export class TimelineController {
       const { cursor } = req.query;
 
       const result = await timelineService.getProcessedTimeline(ticketId, cursor);
+
+      // ⚡ PRO CACHING: Timelines change fast, so we cache for 30s, background refresh up to 5 mins.
+      res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=300');
 
       res.status(200).json({
         success: true,
