@@ -1,4 +1,4 @@
-import { envSchema } from '../schema';
+import { envSchema } from '../schema/index.js';
 
 if (process.env.NODE_ENV !== 'production') {
   const { default: dotenv } = await import('dotenv');
