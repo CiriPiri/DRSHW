@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { timelineController } from './timeline.ctrl';
-import { validateRequest } from '../../middleware/validate.middleware';
+import { timelineController } from './timeline.ctrl.js';
+import { validateRequest } from '../../middleware/validate.middleware.js';
 import { getTimelineSchema } from '../../schema';
 
 const router = Router();
