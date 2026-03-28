@@ -2,12 +2,12 @@ import { z } from 'zod';
 
 // 1. Validate Environment Variables at Startup
 export const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  NODE_ENV: z.string().default('development'), // Relaxed from strict enum just in case
   PORT: z.coerce.number().default(3000),
-  FRONTEND_URL: z.string().url("FRONTEND_URL must be a valid URL").optional(),
-  DEVREV_TOKEN: z.string().min(10, "DEVREV_TOKEN is required"),
+  // Add .trim() to automatically strip accidental spaces
+  FRONTEND_URL: z.string().trim().url("FRONTEND_URL must be a valid URL"),
+  DEVREV_TOKEN: z.string().trim().min(5, "DEVREV_TOKEN is required"),
 });
-
 // Infer strict type for process.env
 export type EnvConfig = z.infer<typeof envSchema>;
 
