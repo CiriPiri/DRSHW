@@ -6,15 +6,14 @@ console.log('\n[BOOT-0] Container waking up. Starting module imports...');
 import express from 'express';
 import cors from 'cors';
 
-// If the app dies right after [BOOT-0], your Zod schema in env.ts is crashing it.
-import { env } from './config/env'; 
+// ✅ FIXED: Added .js to all local imports for strict ESM compatibility
+import { env } from './config/env.js'; 
 console.log('[BOOT-1] ✅ Environment variables parsed by Zod successfully.');
 
-import { logger } from './utils/logger';
-import { timelineRoutes } from './modules/timeline/timeline.route';
-// 1. IMPORT THE NEW TICKET ROUTE
-import { ticketRoutes } from './modules/ticket/ticket.route';
-import { errorHandler } from './middleware/error.middleware';
+import { logger } from './utils/logger.js';
+import { timelineRoutes } from './modules/timeline/timeline.route.js';
+import { ticketRoutes } from './modules/ticket/ticket.route.js';
+import { errorHandler } from './middleware/error.middleware.js';
 console.log('[BOOT-2] ✅ Internal modules imported successfully.');
 
 const app = express();
@@ -59,10 +58,9 @@ app.get('/', (req, res) => {
 // 3. API Routes
 console.log('[BOOT-4] 🛣️  Mounting API Routes');
 app.use('/api/timeline', timelineRoutes);
-// 2. MOUNT THE TICKET ROUTE SO EXPRESS KNOWS ABOUT IT
 app.use('/api/ticket', ticketRoutes); 
 
-// 3. JSON 404 CATCH-ALL (Prevents HTML from reaching the React frontend)
+// 4. JSON 404 CATCH-ALL
 app.use((req, res) => {
   console.log(`[ROUTE] 🔴 404 NOT FOUND: ${req.method} ${req.url}`);
   res.status(404).json({
@@ -72,12 +70,12 @@ app.use((req, res) => {
   });
 });
 
-// 4. Global Error Handler
+// 5. Global Error Handler
 console.log('[BOOT-5] 🛡️  Mounting Error Handler');
 app.use(errorHandler);
 
 // ---------------------------------------------------------
-// FATAL CRASH CATCHERS (Prevents silent 500s)
+// FATAL CRASH CATCHERS
 // ---------------------------------------------------------
 process.on('uncaughtException', (err) => {
   console.error('\n[FATAL CRASH] ❌ Uncaught Exception:', err);
@@ -87,7 +85,7 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('\n[FATAL CRASH] ❌ Unhandled Rejection:', reason);
 });
 
-// 5. Server Initialization
+// 6. Server Initialization
 if (env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   app.listen(env.PORT, () => {
     logger.info(`🚀 TypeScript Backend running on http://localhost:${env.PORT}`);
