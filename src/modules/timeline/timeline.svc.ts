@@ -1,27 +1,34 @@
 // src/modules/timeline/timeline.svc.ts
-import { devRevClient } from '../../clients/devrev.client';
-import { StageUpdateDto } from '../../types';
+import { devRevClient } from '../../clients/devrev.client.js';
+import { StageUpdateDto } from '../../types/index.js';
 
 export class TimelineService {
   /**
    * Orchestrates data fetching and parsing for RWT formatting
    */
   public async getProcessedTimeline(ticketId: string, cursor?: string) {
-    // 1. Fetch raw data from the repository layer
     const rawData = await devRevClient.getTimelineEntries(ticketId, cursor);
     
-    // 2. Apply business logic: Filter and transform to our strict DTO
     const stageUpdates: StageUpdateDto[] = [];
     const entries = rawData.timeline_entries || [];
 
+    // Initialize our golden timestamp variable
+    let ticketCreatedAt: string | null = null;
+
     for (const entry of entries) {
+      
+      // ✅ NEW LOGIC: Hunt for the exact moment the ticket was born
+      if (entry.type === 'timeline_change_event' && entry.event?.type === 'created') {
+        ticketCreatedAt = entry.created_date;
+      }
+
+      // Existing logic: Extract stage changes
       if (entry.type === 'timeline_change_event' && entry.event?.type === 'updated') {
-        const stageDelta = (entry.event.updated?.field_deltas || []).find(d => d.name === 'stage');
+        const stageDelta = (entry.event.updated?.field_deltas || []).find((d: any) => d.name === 'stage');
         
         if (stageDelta) {
           stageUpdates.push({
             timestamp: entry.created_date,
-            // Fallbacks prevent undefined crashes if DevRev changes payload structure slightly
             from: stageDelta.old_value?.fields?.name?.value || 'unknown',
             to: stageDelta.new_value?.fields?.name?.value || 'unknown',
           });
@@ -29,7 +36,9 @@ export class TimelineService {
       }
     }
 
+    // Return the payload with the extracted creation date at the top level
     return {
+      ticketCreatedAt, 
       data: stageUpdates,
       next_cursor: rawData.next_cursor || null,
     };
