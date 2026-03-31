@@ -1,86 +1,157 @@
 import { devRevClient } from '../../clients/devrev.client.js';
-import { StageUpdateDto } from '../../types/index.js';
+import { StageUpdateDto, DevRevTimelineEntry } from '../../types/index.js';
+import { logger } from '../../utils/logger.js'; 
+import { UpstreamApiError } from '../../utils/errors.js';
+
+const BOT_BYPASS_THRESHOLD_MS = 60000;
+
+export interface ProcessedTimelineResponse {
+  firstResponseAt: string | null;
+  customerReplyTimestamps: string[];
+  agentReplyTimestamps: string[];
+  data: StageUpdateDto[];
+  nextCursor: string | null;
+  next_cursor?: string | null;
+}
+
+interface DevRevCommentPayload {
+  visibility?: 'external' | 'internal' | string;
+  created_by?: { type: string };
+  snap_widget_body?: Array<{
+    type: string;
+    from?: Array<{ user?: { type: string } }>;
+  }>;
+}
 
 export class TimelineService {
-  public async getProcessedTimeline(ticketId: string, cursor?: string): Promise<{
-    ticketCreatedAt: string | null;
-    firstResponseAt: string | null;
-    customerReplyTimestamps: string[]; 
-    agentReplyTimestamps: string[]; // ✅ NEW: Track all agent touches
-    data: StageUpdateDto[];
-    next_cursor: string | null;
-  }> {
-    const rawData = await devRevClient.getTimelineEntries(ticketId, cursor);
+  public async getProcessedTimeline(
+    ticketId: string,
+    ticketCreatedAt: Date,
+    cursor?: string
+  ): Promise<ProcessedTimelineResponse> {
     
-    const stageUpdates: StageUpdateDto[] = [];
-    const entries = rawData.timeline_entries || [];
+    let rawData;
+    try {
+      rawData = await devRevClient.getTimelineEntries(ticketId, cursor); 
+    } catch (error) {
+      logger.error({ ticketId, cursor, error }, 'Failed to fetch timeline from DevRev API');
+      throw new UpstreamApiError('DevRev API unreachable or failed', 502, 'UPSTREAM_API_FAILURE');
+    }
 
-    let ticketCreatedAt: string | null = null;
+    const stageUpdates: StageUpdateDto[] = [];
+    const entries: DevRevTimelineEntry[] = rawData?.timeline_entries || [];
+
     let firstResponseAt: string | null = null;
-    const customerReplyTimestamps: string[] = []; 
-    const agentReplyTimestamps: string[] = []; // ✅ NEW
+    let firstResponseTimestamp: number = Infinity;
+    const customerReplyTimestamps: string[] = [];
+    const agentReplyTimestamps: string[] = [];
+    const creationTimeMs = ticketCreatedAt.getTime();
+
+    // 🛡️ Helper to violently extract the stage name
+    const extractStageName = (payload: any): string => {
+      if (!payload) return 'Unknown';
+      
+      // Postman Payload Path 1: Initial Creation (event.created.object.stage.name)
+      if (typeof payload === 'string') return payload; 
+      
+      // Postman Payload Path 2: Updates (fields.name.value)
+      if (payload.fields?.name?.value) return payload.fields.name.value;
+      
+      // Fallbacks
+      if (payload.display_name) return payload.display_name;
+      if (payload.stage?.name) return payload.stage.name;
+      if (payload.name) return payload.name;
+      
+      return 'Unknown';
+    };
 
     for (const entry of entries) {
-      if (entry.type === 'timeline_change_event' && entry.event?.type === 'created') {
-        ticketCreatedAt = entry.created_date;
-      }
+      const entryTimestamp = new Date(entry.created_date).getTime();
 
-      const commentEntry = entry as any;
+      // --- 1. PROCESS STAGE TRANSITIONS ---
+      if (entry.type === 'timeline_change_event') {
+        const event = entry.event as any; 
 
-      if (commentEntry.type === 'timeline_comment' && commentEntry.visibility === 'external') {
-        
-        const isDirectReply = commentEntry.created_by?.type === 'dev_user';
-        const isCustomerReply = commentEntry.created_by?.type === 'rev_user'; 
-
-        const isEmailReply = commentEntry.snap_widget_body?.some((widget: any) => 
-          widget.type === 'email_preview' && 
-          widget.from?.some((f: any) => f.user?.type === 'dev_user')
-        );
-
-        const isCustomerEmailReply = commentEntry.snap_widget_body?.some((widget: any) => 
-          widget.type === 'email_preview' && 
-          widget.from?.some((f: any) => f.user?.type === 'rev_user')
-        );
-
-        let isAutoForward = false;
-        if (ticketCreatedAt) {
-          const timeDiffMs = new Date(commentEntry.created_date).getTime() - new Date(ticketCreatedAt).getTime();
-          if (timeDiffMs < 60000) { 
-            isAutoForward = true;
+        // Catch the INITIAL stage from the 'created' event
+        if (event?.type === 'created') {
+          // Look at your Postman payload: event.created.object.stage.name = "Solved"
+          const initialStageName = event.created?.object?.stage?.name;
+          
+          if (initialStageName) {
+            stageUpdates.push({
+              timestamp: entry.created_date,
+              from: 'Ticket Created',
+              to: extractStageName(initialStageName)
+            });
           }
         }
 
-        if (!isAutoForward) {
-            if (isDirectReply || isEmailReply) {
-              agentReplyTimestamps.push(commentEntry.created_date); // ✅ Save every agent reply
-              if (!firstResponseAt || new Date(commentEntry.created_date) < new Date(firstResponseAt)) {
-                firstResponseAt = commentEntry.created_date;
-              }
-            } else if (isCustomerReply || isCustomerEmailReply) {
-              customerReplyTimestamps.push(commentEntry.created_date);
-            }
+        // Catch all SUBSEQUENT stage updates
+        if (event?.type === 'updated') {
+          const updatedDeltas = event.updated?.field_deltas || [];
+          const stageDelta = updatedDeltas.find((d: any) => d.name === 'stage' || d.name === 'status');
+          
+          if (stageDelta) {
+            stageUpdates.push({
+              timestamp: entry.created_date,
+              from: extractStageName(stageDelta.old_value),
+              to: extractStageName(stageDelta.new_value),
+            });
+          }
         }
+        continue;
       }
 
-      if (entry.type === 'timeline_change_event' && entry.event?.type === 'updated') {
-        const stageDelta = (entry.event.updated?.field_deltas || []).find((d: any) => d.name === 'stage');
-        if (stageDelta) {
-          stageUpdates.push({
-            timestamp: entry.created_date,
-            from: stageDelta.old_value?.fields?.name?.value || 'unknown',
-            to: stageDelta.new_value?.fields?.name?.value || 'unknown',
-          });
+      // --- 2. PROCESS EXTERNAL COMMENTS ---
+      if (entry.type === 'timeline_comment') {
+        const commentEntry = entry as DevRevTimelineEntry & DevRevCommentPayload;
+
+        if (commentEntry.visibility === 'external') {
+          const isDirectAgentReply = commentEntry.created_by?.type === 'dev_user';
+          const isDirectCustomerReply = commentEntry.created_by?.type === 'rev_user';
+
+          const isEmailAgentReply = !!commentEntry.snap_widget_body?.some(
+            (widget: any) => widget.type === 'email_preview' && widget.from?.some((f: any) => f.user?.type === 'dev_user')
+          );
+
+          const isEmailCustomerReply = !!commentEntry.snap_widget_body?.some(
+            (widget: any) => widget.type === 'email_preview' && widget.from?.some((f: any) => f.user?.type === 'rev_user')
+          );
+
+          const isAutoForward = (entryTimestamp - creationTimeMs) < BOT_BYPASS_THRESHOLD_MS;
+
+          if (!isAutoForward) {
+            if (isDirectAgentReply || isEmailAgentReply) {
+              agentReplyTimestamps.push(commentEntry.created_date);
+              
+              if (entryTimestamp < firstResponseTimestamp) {
+                firstResponseTimestamp = entryTimestamp;
+                firstResponseAt = commentEntry.created_date;
+              }
+            } else if (isDirectCustomerReply || isEmailCustomerReply) {
+              customerReplyTimestamps.push(commentEntry.created_date);
+            }
+          }
         }
       }
     }
 
+    // --- 3. HARD LIMIT PAGINATION CIRCUIT BREAKER ---
+    let finalNextCursor = rawData.next_cursor || null;
+    
+    // If DevRev sends an empty page (entries.length === 0), it is lying about next_cursor.
+    // We MUST force it to null here to stop the frontend loop.
+    if (finalNextCursor === cursor || entries.length === 0) {
+      finalNextCursor = null;
+    }
+
     return {
-      ticketCreatedAt, 
       firstResponseAt,
-      customerReplyTimestamps, 
-      agentReplyTimestamps, // ✅ Export it
+      customerReplyTimestamps,
+      agentReplyTimestamps,
       data: stageUpdates,
-      next_cursor: rawData.next_cursor || null,
+      nextCursor: finalNextCursor, 
+      next_cursor: finalNextCursor, 
     };
   }
 }

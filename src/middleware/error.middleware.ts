@@ -1,37 +1,42 @@
+// --- middleware/errorHandler.ts ---
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../utils/errors';
 import { logger } from '../utils/logger';
 
 export const errorHandler = (
-  err: Error,
+  err: unknown,
   req: Request,
   res: Response,
   next: NextFunction
 ): void => {
   
-  // ✅ THE FAILSAFE: Stop ERR_HTTP_HEADERS_SENT crashes.
-  // If the controller already sent the response to the frontend, we cannot send another one.
-  // We MUST delegate this to the default Express error handler to close the connection safely.
   if (res.headersSent) {
     return next(err);
   }
 
-  // 1. Handle Known Operational Errors (Validation, Not Found, etc.)
-  if (err instanceof AppError) {
-    logger.warn({ err, code: err.code }, 'Operational error occurred');
-    res.status(err.statusCode).json({
+  // Normalize the error to ensure we are dealing with an object
+  const normalizedError = err instanceof Error ? err : new Error(String(err));
+
+  if (normalizedError instanceof AppError) {
+    logger.warn({ err: normalizedError, code: normalizedError.code }, 'Operational error occurred');
+    res.status(normalizedError.statusCode).json({
       success: false,
-      error: err.message,
-      code: err.code,
+      error: normalizedError.message,
+      code: normalizedError.code,
+      details: null, 
     });
     return;
   }
 
-  // 2. Handle Unknown Programmer Errors / Hard Crashes
-  logger.error({ err }, 'Unhandled exception occurred');
+  logger.error({ err: normalizedError }, 'Unhandled exception occurred');
+  
+  const isDev = process.env.NODE_ENV !== 'production';
+
   res.status(500).json({
     success: false,
     error: 'Internal Server Error',
     code: 'INTERNAL_ERROR',
+    // Expose stack trace only in development for easier debugging
+    ...(isDev && { details: normalizedError.stack }),
   });
 };
