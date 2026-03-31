@@ -1,15 +1,15 @@
-import { Router } from 'express';
-import { timelineController } from './timeline.ctrl.js';
+import { Router, NextFunction } from 'express';
 import { validateRequest } from '../../middleware/validate.middleware.js';
-import { getTimelineSchema } from '../../schema';
+import { getTimelineSchema } from '../../schema/index.js';
+import { timelineController } from './timeline.ctrl.js'; 
 
 const router = Router();
 
-// Route definition with strict schema validation injected BEFORE the controller
 router.get(
   '/:ticketId',
   validateRequest(getTimelineSchema),
-  timelineController.getTimeline
+  // ✅ THE TS FIX: Bypass the Express generic type clash using 'any'
+  (req: any, res: any, next: NextFunction) => timelineController.getTimeline(req, res, next)
 );
 
 export { router as timelineRoutes };
