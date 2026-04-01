@@ -1,26 +1,28 @@
-import { Request, Response, NextFunction } from 'express';
-import { ticketService } from './ticket.svc.js';
-import { getTimelineSchema, GetTimelineInput } from '../../schema/index.js';
-import { ApiResponse, TicketMetadataDto } from '../../schema/index.js';
+import { Request, Response } from 'express'; // ✅ NextFunction removed, no longer needed
+import { ticketService } from './ticket.svc.js'; 
+import { GetTicketInput } from '../../schema/index.js'; // ✅ Import your strict Zod type
 
 export class TicketController {
-  public async getTicket(
-    req: Request<GetTimelineInput['params']>,
-    res: Response<ApiResponse<TicketMetadataDto>>,
-    next: NextFunction
-  ): Promise<void> {
-    try {
-      const { ticketId } = req.params;
-      const data = await ticketService.getMetadata(ticketId);
+  
+  // ✅ Arrow function protects 'this' binding
+  public getTicket = async (
+    req: Request, 
+    res: Response
+  ): Promise<void> => {
+    
+    // ✅ Safely inherit the exact types guaranteed by your Zod middleware
+    const { ticketId } = req.params as GetTicketInput['params'];
 
-      // ⚡ PRO CACHING: Cache for 60 seconds. Revalidate in background up to 1 hour.
-      res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=3600');
-      
-      res.status(200).json({ success: true, data });
-    } catch (error) {
-      next(error);
-    }
-  }
+    // ✅ No more 'as string' casting. TS knows it is a perfectly formatted DevRev ID.
+    const data = await ticketService.getMetadata(ticketId);
+
+    res.status(200).json({
+      success: true,
+      data,
+    });
+    
+    // Explicit return; is not needed in async void functions without fallthrough
+  };
 }
 
 export const ticketController = new TicketController();

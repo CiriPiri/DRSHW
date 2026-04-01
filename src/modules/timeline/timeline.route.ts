@@ -1,15 +1,16 @@
 import { Router } from 'express';
 import { timelineController } from './timeline.ctrl.js';
 import { validateRequest } from '../../middleware/validate.middleware.js';
-import { getTimelineSchema } from '../../schema';
+import { getTimelineSchema } from '../../schema/index.js';
+import { asyncHandler } from '../../utils/asyncHandler.js';
 
 const router = Router();
 
-// Route definition with strict schema validation injected BEFORE the controller
 router.get(
   '/:ticketId',
   validateRequest(getTimelineSchema),
-  timelineController.getTimeline
+  // ✅ Safely wrapped! No more unhandled promise crashes.
+  asyncHandler(timelineController.getTimeline) 
 );
 
 export { router as timelineRoutes };

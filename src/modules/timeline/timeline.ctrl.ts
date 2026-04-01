@@ -1,38 +1,56 @@
 import { Request, Response, NextFunction } from 'express';
-// Explicit .js extensions required for ESM NodeNext resolution
-import { timelineService } from './timeline.svc.js';
+// ✅ Import the exact return type directly from the service
+import { timelineService, ProcessedTimelineResponse } from './timeline.svc.js';
 import { GetTimelineInput } from '../../schema/index.js';
-import { StageUpdateDto } from '../../types/index.js';
+// Assume you have a ticket service that fetches the core metadata
+import { ticketService } from '../ticket/ticket.svc.js'; 
 
 export class TimelineController {
-  /**
-   * Handles the HTTP request, invokes service, and formats response
-   */
-  public async getTimeline(
-    req: Request<GetTimelineInput['params'], any, any, GetTimelineInput['query']>,
-    res: Response, // <-- Relaxed type slightly to allow our new variable
+  
+  // ✅ Arrow function prevents 'this' context loss when passed to the Express Router
+public getTimeline = async (
+    req: Request,
+    res: Response,
     next: NextFunction
-  ): Promise<void> {
+  ): Promise<void> => {
     try {
-      const { ticketId } = req.params;
-      const { cursor } = req.query;
+      // ✅ Safely cast the validated data right here inside the controller
+      const { ticketId } = req.params as GetTimelineInput['params'];
+      const { cursor } = req.query as GetTimelineInput['query'];
 
-      const result = await timelineService.getProcessedTimeline(ticketId, cursor as string);
 
-      // ⚡ PRO CACHING: Timelines change fast, so we cache for 30s, background refresh up to 5 mins.
+      // 1. You MUST fetch the actual ticket metadata first to get the creation date.
+      // This is required for the 60-second bot bypass logic to survive pagination.
+const ticketMetadata = await ticketService.getMetadata(ticketId);      
+     if (!ticketMetadata || !ticketMetadata.createdAt) {
+        throw new Error(`Ticket ${ticketId} has no creation date from vendor`);
+      }
+
+      const createdAtDate = new Date(ticketMetadata.createdAt);
+      // 2. Pass the date into the newly typed service
+      const result: ProcessedTimelineResponse = await timelineService.getProcessedTimeline(
+        ticketId,
+        createdAtDate,
+        cursor // Zod makes this optional, TS is happy
+      );
+
       res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=300');
 
-      res.status(200).json({
+      // 3. Return the exact payload required by your SLA Engine
+   res.status(200).json({
         success: true,
-        ticketCreatedAt: result.ticketCreatedAt, // ✅ THE FIX: Exposing the variable
-        data: result.data,
-        next_cursor: result.next_cursor,
-      });
+        ticketCreatedAt: createdAtDate.toISOString(),
+        firstResponseAt: result.firstResponseAt,
+        customerReplyTimestamps: result.customerReplyTimestamps || [],
+        agentReplyTimestamps: result.agentReplyTimestamps || [], // ✅ Guaranteed array, stops React crash
+        data: result.data || [],
+        next_cursor: result.nextCursor, // ✅ RESTORED SNAKE_CASE! This reactivates frontend pagination
+      })
+
     } catch (error) {
-      // Pass to centralized error handler
-      next(error); 
+      next(error);
     }
-  }
+  };
 }
 
 export const timelineController = new TimelineController();
