@@ -68,25 +68,25 @@ export class TimelineService {
     for (const entry of entries) {
       const entryTimestamp = new Date(entry.created_date).getTime();
 
-      // --- 1. PROCESS STAGE TRANSITIONS ---
+   // --- 1. PROCESS STAGE TRANSITIONS ---
       if (entry.type === 'timeline_change_event') {
         const event = entry.event as any; 
 
-        // Catch the INITIAL stage from the 'created' event
-        if (event?.type === 'created') {
-          // Look at your Postman payload: event.created.object.stage.name = "Solved"
-          const initialStageName = event.created?.object?.stage?.name;
-          
-          if (initialStageName) {
-            stageUpdates.push({
-              timestamp: entry.created_date,
-              from: 'Ticket Created',
-              to: extractStageName(initialStageName)
-            });
-          }
-        }
+        // 🛡️ Helper: strictly prioritizes the original path that built your table
+        const extractStageName = (payload: any): string => {
+          if (!payload) return 'Unknown';
+          if (typeof payload === 'string') return payload; 
+          if (payload.fields?.name?.value) return payload.fields.name.value;
+          if (payload.display_name) return payload.display_name;
+          if (payload.stage?.name) return payload.stage.name;
+          if (payload.name) return payload.name;
+          return 'Unknown';
+        };
 
-        // Catch all SUBSEQUENT stage updates
+        // ❌ DELETED: The 'created' event block has been entirely removed.
+        // We only care about actual transitions so the frontend can infer the origin.
+
+        // Catch actual stage updates
         if (event?.type === 'updated') {
           const updatedDeltas = event.updated?.field_deltas || [];
           const stageDelta = updatedDeltas.find((d: any) => d.name === 'stage' || d.name === 'status');
